@@ -18,16 +18,35 @@ class LoginData:
     token: str
 
 
+@dataclass
+class WebSession:
+    """Values copied from a logged-in browser session on www.twitch.tv."""
+
+    auth_token: str
+    device_id: str
+    integrity: str
+
+
 class LoginFormAdapter:
     """
     Mirrors LoginForm - updates the login status labels and handles
     the device-code activation flow.
+
+    The webui additionally implements the web-session login (see
+    ``webui/patches.py``): ``ask_web_session`` shows a form asking for the
+    browser's auth-token / X-Device-Id / Client-Integrity values and waits
+    until ``submit_web_session`` is called from the UI.
     """
 
     def __init__(self, manager: "WebUIManager"):
         self._manager = manager
         self._confirm = asyncio.Event()
         self.page_url: "URL | None" = None
+        # web-session form state, read by LoginSection through bindings
+        self.session_requested: bool = False
+        self.integrity_only: bool = False
+        self.form_error: str = ""
+        self._session: WebSession | None = None
 
     def clear(self, login: bool = False, password: bool = False, token: bool = False):
         pass
@@ -50,6 +69,38 @@ class LoginFormAdapter:
 
     def confirm(self) -> None:
         """Signal that the user has pressed the login button."""
+        self._confirm.set()
+
+    async def ask_web_session(
+        self, *, integrity_only: bool = False, error: str = ""
+    ) -> WebSession:
+        """
+        Ask the user to paste a browser session and wait for it.
+
+        With ``integrity_only`` the user is logged in already and only a fresh
+        Client-Integrity value is needed, so the login status is left alone.
+        """
+        self.page_url = None
+        self.integrity_only = integrity_only
+        self.form_error = error
+        self.session_requested = True
+        if not integrity_only:
+            self.update(_("gui", "login", "required"), None)
+        self._manager.grab_attention(sound=False)
+        self._manager.print(
+            _("webui", "login", "integrity_request" if integrity_only else "session_request")
+        )
+        try:
+            await self.wait_for_login_press()
+        finally:
+            self.session_requested = False
+        assert self._session is not None
+        return self._session
+
+    def submit_web_session(self, session: WebSession) -> None:
+        """Called by LoginSection when the user submits the web-session form."""
+        self._session = session
+        self.form_error = ""
         self._confirm.set()
 
     def update(self, status: str, user_id: int | None):

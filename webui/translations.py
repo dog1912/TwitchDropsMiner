@@ -50,7 +50,42 @@ default_webui_translation: dict[str, Any] = {
             "register": "Register",
             "sign_in": "Sign in",
         },
-        "login": {"logout": "Logout"},
+        "login": {
+            "logout": "Logout",
+            "session_title": "Sign in with a browser session",
+            "session_help": (
+                "Twitch currently rejects the miner's own login, so the miner runs on "
+                "your browser's session instead. In a browser where you are logged in "
+                "to twitch.tv: open DevTools (F12), tab **Network**, filter by `gql`, "
+                "click any request to `gql.twitch.tv/gql` and copy from "
+                "**Request Headers**: `X-Device-Id` and `Client-Integrity`. "
+                "`auth-token` is the cookie of that name on twitch.tv "
+                "(**Application** / **Storage** → Cookies). Copy all values from the "
+                "same request; Client-Integrity expires after about 16 hours and the "
+                "miner will ask for a new one."
+            ),
+            "auth_token": "auth-token cookie",
+            "device_id": "X-Device-Id header",
+            "integrity": "Client-Integrity header",
+            "submit": "Sign in",
+            "integrity_button": "Enter new Client-Integrity",
+            "session_request": (
+                "Login required: press the Login button and paste your browser session "
+                "(auth-token, X-Device-Id, Client-Integrity)."
+            ),
+            "integrity_request": (
+                "Twitch rejected the Client-Integrity token (it expires after ~16h). "
+                "Copy a fresh one from your browser and paste it with the button on the "
+                "Main tab."
+            ),
+            "invalid_token": "Twitch rejected this auth-token.",
+            "wrong_client": (
+                "This auth-token wasn't issued to the Twitch website. "
+                "Copy it from a normal browser session on www.twitch.tv."
+            ),
+            "required_fields": "All fields are required.",
+            "not_requested": "The miner isn't waiting for a session right now.",
+        },
         "inventory": {"no_campaigns": "No campaigns match the current filters."},
         "game_list": {
             "no_campaigns": '"{name}" has no active drop campaigns.',

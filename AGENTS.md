@@ -112,14 +112,29 @@ Both the NiceGUI UI and the async backend run on NiceGUI's event loop — no thr
 ### Logout / session teardown
 `logout()` in `manager.py` is webui-only (the tkinter GUI has no logout). It works by racing a signal against the next HTTP request rather than doing teardown itself:
 
-1. `session.cookie_jar.clear()` — empties the in-memory jar so `shutdown()` saves empty cookies to disk, preventing auto-login on restart.
-2. `self.channels.clear()` — clears the channel list UI immediately (the adapter-only call; `shutdown()` clears `twitch.py`'s internal dict but doesn't update the UI).
-3. `_reload_requested.set()` — arms the signal.
-4. `state_change(INVENTORY_FETCH)` — wakes the main loop out of IDLE so it reaches an HTTP call.
+1. `auth_state.invalidate(delete_cookies=True)` — drops the token from memory, empties the jar and deletes `cookies.jar`, preventing auto-login on restart. The token is deliberately **not** revoked at Twitch: it is the user's own browser session (see below), revoking it would log them out of the browser too.
+2. `forget_session()` — removes the stored device id / Client-Integrity (`config/web_session.json`).
+3. `self.channels.clear()` — clears the channel list UI immediately (the adapter-only call; `shutdown()` clears `twitch.py`'s internal dict but doesn't update the UI).
+4. `_reload_requested.set()` — arms the signal.
+5. `state_change(INVENTORY_FETCH)` — wakes the main loop out of IDLE so it reaches an HTTP call.
 
 `coro_unless_closed()` races every HTTP request against `_reload_requested`. When it fires, `ReloadRequest` is raised and propagates up through `_run()` to `run()`, which calls `shutdown()` (full teardown: stops websockets, closes session, clears all internal state) then restarts `_run()` fresh (re-login flow, new user topics).
 
 Do not add teardown logic to `logout()` that `shutdown()` already handles — it will run redundantly.
+
+### Web-session login (temporary workaround, `webui/patches.py`)
+Since September 2026 Twitch answers the device-code login (`/oauth2/device`) with HTTP 400 `invalid client` for every client the miner can present as ([upstream #1165](https://github.com/DevilXD/TwitchDropsMiner/issues/1165)). The one client that still gets a device code (`SMARTBOX`) receives tokens that see an empty campaign list, so it is useless for mining. What does work is the user's own browser session: the `auth-token` cookie plus the `X-Device-Id` and `Client-Integrity` headers the website sends to GQL. Twitch binds the integrity requirement to the client that issued the token and honours `Client-Integrity` only with the website's `Client-Id`, so the miner must present as `ClientType.WEB` throughout.
+
+`webui/patches.py` implements this without editing `twitch.py`, by monkey-patching:
+- `Twitch.__init__` — sets `_client_type = ClientType.WEB`.
+- `_AuthState._oauth_login` — instead of the device flow, calls `gui.login.ask_web_session()` (form on the Main tab), checks the pasted token via `/oauth2/validate` (must be issued to the WEB client), stores device id + integrity in `config/web_session.json` and returns the token; `_validate()` then saves it into `cookies.jar` as usual.
+- `_AuthState._validate` — restores `device_id` from `web_session.json` before the original would mint one from the `unique_id` cookie (the jar can't hold it: `_validate()` re-saves a pre-login cookie snapshot). `shutdown()` calls `clear()`, so this runs on every reload.
+- `_AuthState.headers` — adds `Client-Integrity` to GQL headers.
+- `Twitch.gql_request` — on `failed integrity check` (tokens expire after ~16h) asks for a fresh integrity value via `ask_web_session(integrity_only=True)` under a lock (concurrent callers wait, then retry) and retries.
+
+`LoginFormAdapter.ask_web_session()` / `submit_web_session()` and the dialog in `LoginSection` are the UI side. The upstream `ask_enter_code()` popup flow is kept for interface parity but is no longer reached.
+
+Remove all of this once upstream login works again; the tkinter entry point (`main.py`) is unaffected because the patches are only imported by `main_webui.py`.
 
 ### No direct UI calls from backend
 `twitch.py` never calls `ui.*` directly. The flow is always:

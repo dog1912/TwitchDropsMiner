@@ -111,6 +111,19 @@ When enabled, the WebUI requires a login before accessing the dashboard:
 
 Authentication is disabled by default (`WEBUI_AUTH=0`). The entire auth system is skipped — no middleware, no login page, no database is created.
 
+## Twitch Login (browser session)
+
+Twitch currently rejects the miner's device-code login (`invalid client`, see [upstream #1165](https://github.com/DevilXD/TwitchDropsMiner/issues/1165)). Until that is fixed, the WebUI signs in with your own browser session instead:
+
+1. In a browser where you are logged in to twitch.tv, open DevTools (F12) → **Network**, filter by `gql`, and click any request to `gql.twitch.tv/gql`.
+2. From **Request Headers** copy `X-Device-Id` and `Client-Integrity`.
+3. Copy the `auth-token` cookie for twitch.tv (**Application** / **Storage** → Cookies).
+4. In the WebUI press **Login** and paste the three values.
+
+The token is saved to `config/cookies.jar` and the device id / integrity to `config/web_session.json`, so restarts don't ask again. `Client-Integrity` expires after about 16 hours; when Twitch rejects it the miner pauses and shows an **Enter new Client-Integrity** button on the Main tab — copy a fresh header value (same browser, same device id) and paste it. Take all values from the same browser profile: the integrity token is bound to the device id.
+
+**Logout** only forgets the stored session; it does not revoke the token, so your browser stays logged in.
+
 ## Troubleshooting
 
 **"NiceGUI is not installed" error**

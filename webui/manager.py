@@ -194,21 +194,6 @@ class WebUIManager:
                 with ui.tab_panel("help"):
                     manager.help_panel.build()
 
-    async def _invalidate_token(self) -> None:
-        twitch = self._twitch
-        auth_state = await twitch.get_auth()
-        async with twitch.request(
-            "POST",
-            "https://id.twitch.tv/oauth2/revoke",
-            data={
-                "client_id": twitch._client_type.CLIENT_ID,
-                "token": auth_state.access_token,
-            },
-        ) as response:
-            if response.status != 200:
-                logger.error(f"Failed to invalidate the auth token: {response.status}")
-        auth_state.invalidate(delete_cookies=True)
-
     def set_dark_mode(self, enabled: bool) -> None:
         """Apply dark mode to all connected clients."""
         self._twitch.settings.dark_mode = enabled
@@ -300,8 +285,19 @@ class WebUIManager:
         self._twitch.state_change(State.INVENTORY_FETCH)()
 
     async def logout(self) -> None:
+        """
+        Forget the stored session and restart into the login flow.
+
+        The token is the user's own browser session (see webui/patches.py), so it
+        is deliberately not revoked: that would log them out of Twitch in the
+        browser as well.
+        """
+        from webui.patches import forget_session
+
         self.channels.clear()
-        await self._invalidate_token()
+        auth_state = self._twitch._auth_state
+        auth_state.invalidate(delete_cookies=True)
+        forget_session(auth_state)
         self.restart()
 
     def display_drop(self, drop, *, countdown: bool = True, subone: bool = False):
