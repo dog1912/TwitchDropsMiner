@@ -62,53 +62,26 @@ setattr(
 # The patches below make the miner present as the WEB client, ask the user to
 # paste those three values instead of running the device-code flow, attach
 # ``Client-Integrity`` to every GQL request, and ask for a fresh one when Twitch
-# rejects it (they expire after ~16h).  Remove once upstream login works again.
+# rejects it (observed lifetime is roughly an hour).  A userscript in the user's
+# browser can push fresh values to POST /api/session (apply_pushed_session), so
+# nothing has to be pasted by hand.  Remove once upstream login works again.
 
 import asyncio
-import json
 import logging
-from contextlib import suppress
 
 import twitch as _twitch
-from constants import CONFIG_PATH, ClientType
+from constants import ClientType
 from exceptions import GQLException
 from translate import _
+from webui.web_session import (
+    apply_pushed_session,  # noqa: F401  (re-exported for manager.py)
+    forget_session,  # noqa: F401
+    integrity_of as _integrity,
+    load_session as _load_session,
+    save_session as _save_session,
+)
 
-# Holds the browser's X-Device-Id and Client-Integrity.  The auth-token itself
-# lives in cookies.jar like any other session.  The device id can't be kept in
-# the jar: _validate() re-saves a pre-login cookie snapshot that carries the
-# random unique_id Twitch handed out, which would replace the browser's.
-SESSION_PATH = CONFIG_PATH / "web_session.json"
 _logger = logging.getLogger("TwitchDrops")
-
-
-def _load_session() -> dict[str, str]:
-    try:
-        data = json.loads(SESSION_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _save_session(device_id: str, integrity: str) -> None:
-    SESSION_PATH.write_text(
-        json.dumps({"device_id": device_id, "integrity": integrity}), encoding="utf-8"
-    )
-    with suppress(OSError):
-        SESSION_PATH.chmod(0o600)
-
-
-def _integrity(auth_state: _twitch._AuthState) -> str | None:
-    if not hasattr(auth_state, "integrity_token"):
-        auth_state.integrity_token = _load_session().get("integrity")
-    return auth_state.integrity_token
-
-
-def forget_session(auth_state: _twitch._AuthState) -> None:
-    auth_state._delattrs("device_id")
-    auth_state.integrity_token = None
-    SESSION_PATH.unlink(missing_ok=True)
-
 
 _original_twitch_init = _twitch.Twitch.__init__
 
@@ -202,3 +175,4 @@ async def _refresh_integrity(twitch: _twitch.Twitch, used_token: str | None) -> 
 
 
 setattr(_twitch.Twitch, "gql_request", _gql_request)
+

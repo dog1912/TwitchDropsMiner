@@ -16,6 +16,7 @@ if __name__ == "__main__":
     import os
     import sys
     import signal
+    import secrets
     import asyncio
     import logging
     import argparse
@@ -51,9 +52,11 @@ if __name__ == "__main__":
         LOCK_PATH,
         CONFIG_PATH,
         State,
+        _resource_path,
     )
     from webui.auth import AuthManager
     from webui.ssl import get_ssl_kwargs
+    from fastapi import Request
     from fastapi.responses import JSONResponse
 
     # Apply webui-only monkey-patches before constructing Settings/Twitch.
@@ -266,6 +269,39 @@ if __name__ == "__main__":
             },
             status_code=200 if healthy else 503,
         )
+
+    @app.post("/api/session")
+    async def push_session(request: Request):
+        """Receive a browser session pushed by webui/tdm-session-sync.user.js.
+
+        Body: {"integrity": ..., "device_id": ..., "auth_token": ...}. The
+        X-Api-Key header must equal WEBUI_SESSION_KEY; unset key disables it.
+        """
+        key = os.environ.get("WEBUI_SESSION_KEY", "")
+        if not key:
+            return JSONResponse(
+                {"status": "error", "message": "WEBUI_SESSION_KEY is not set"},
+                status_code=404,
+            )
+        if not secrets.compare_digest(request.headers.get("X-Api-Key", ""), key):
+            return JSONResponse({"status": "error", "message": "bad key"}, status_code=403)
+        if twitch_client is None:
+            return JSONResponse({"status": "error", "message": "starting"}, status_code=503)
+        try:
+            data = await request.json()
+        except ValueError:
+            data = None
+        if not isinstance(data, dict):
+            return JSONResponse(
+                {"status": "error", "message": "JSON object expected"}, status_code=400
+            )
+        result = twitch_client.gui.receive_session(data)
+        return JSONResponse(result, status_code=400 if result["status"] == "error" else 200)
+
+    app.add_static_file(
+        local_file=_resource_path("webui/tdm-session-sync.user.js"),
+        url_path="/tdm-session-sync.user.js",
+    )
 
     # Start NiceGUI - this blocks until shutdown
     try:

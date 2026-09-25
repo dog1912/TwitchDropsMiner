@@ -21,7 +21,13 @@ class AuthManager:
     AUTH_ENABLED = os.environ.get("WEBUI_AUTH", "0") == "1"
     _COOKIE = "tdm_auth"
     _COOKIE_MAX_AGE = 86400 * 30
-    _UNPROTECTED = ("/login", "/auth", "/_nicegui", "/icons", "/favicon.ico", "/health")
+    _UNPROTECTED = (
+        "/login", "/auth", "/_nicegui", "/icons", "/favicon.ico", "/health",
+        # authenticated by WEBUI_SESSION_KEY instead (the userscript has no cookie)
+        "/api/session",
+        # static script with placeholders only, no secrets
+        "/tdm-session-sync.user.js",
+    )
     _DB_PATH = CONFIG_PATH / "webui_auth.db"
 
     def __init__(self):

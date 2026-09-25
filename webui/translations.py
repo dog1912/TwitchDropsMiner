@@ -61,8 +61,9 @@ default_webui_translation: dict[str, Any] = {
                 "**Request Headers**: `X-Device-Id` and `Client-Integrity`. "
                 "`auth-token` is the cookie of that name on twitch.tv "
                 "(**Application** / **Storage** → Cookies). Copy all values from the "
-                "same request; Client-Integrity expires after about 16 hours and the "
-                "miner will ask for a new one."
+                "same request. Client-Integrity expires after roughly an hour, so "
+                "install the userscript served at `/tdm-session-sync.user.js` on this "
+                "miner: your browser will then send fresh values automatically."
             ),
             "auth_token": "auth-token cookie",
             "device_id": "X-Device-Id header",
@@ -74,9 +75,9 @@ default_webui_translation: dict[str, Any] = {
                 "(auth-token, X-Device-Id, Client-Integrity)."
             ),
             "integrity_request": (
-                "Twitch rejected the Client-Integrity token (it expires after ~16h). "
-                "Copy a fresh one from your browser and paste it with the button on the "
-                "Main tab."
+                "Twitch rejected the Client-Integrity token (they expire after roughly an "
+                "hour). Waiting for the browser userscript to send a fresh one; you can "
+                "also paste it with the button on the Main tab."
             ),
             "invalid_token": "Twitch rejected this auth-token.",
             "wrong_client": (
@@ -85,6 +86,12 @@ default_webui_translation: dict[str, Any] = {
             ),
             "required_fields": "All fields are required.",
             "not_requested": "The miner isn't waiting for a session right now.",
+            "pushed_login": "Browser session received from the userscript, logging in.",
+            "pushed_integrity": "Fresh Client-Integrity received from the userscript.",
+            "pushed_other_device": (
+                "The userscript sent a session for a different X-Device-Id than the one "
+                "logged in; log out and let it log in again."
+            ),
         },
         "inventory": {"no_campaigns": "No campaigns match the current filters."},
         "game_list": {

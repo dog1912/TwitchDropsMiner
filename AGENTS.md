@@ -134,6 +134,8 @@ Since September 2026 Twitch answers the device-code login (`/oauth2/device`) wit
 
 `LoginFormAdapter.ask_web_session()` / `submit_web_session()` and the dialog in `LoginSection` are the UI side. The upstream `ask_enter_code()` popup flow is kept for interface parity but is no longer reached.
 
+Storage and the push logic live in `webui/web_session.py` (no `twitch` import, so it is unit-tested in `tests/test_session_push.py`). Because integrity tokens only last about an hour, `webui/tdm-session-sync.user.js` (served at `/tdm-session-sync.user.js`, bundled by `build.spec`) hooks `fetch` in the user's browser and posts the live headers to `POST /api/session` in `main_webui.py`. That endpoint is authenticated by the `WEBUI_SESSION_KEY` env var (disabled when unset, constant-time compare) and is therefore listed in `AuthManager._UNPROTECTED`. `apply_pushed_session()` resolves a pending login/integrity prompt if one is waiting, otherwise it just replaces the stored integrity so the next `failed integrity check` retries silently.
+
 Remove all of this once upstream login works again; the tkinter entry point (`main.py`) is unaffected because the patches are only imported by `main_webui.py`.
 
 ### No direct UI calls from backend

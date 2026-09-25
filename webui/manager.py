@@ -292,13 +292,19 @@ class WebUIManager:
         is deliberately not revoked: that would log them out of Twitch in the
         browser as well.
         """
-        from webui.patches import forget_session
+        from webui.web_session import forget_session
 
         self.channels.clear()
         auth_state = self._twitch._auth_state
         auth_state.invalidate(delete_cookies=True)
         forget_session(auth_state)
         self.restart()
+
+    def receive_session(self, data: dict) -> dict:
+        """Apply a browser session pushed to POST /api/session (see webui/patches.py)."""
+        from webui.web_session import apply_pushed_session
+
+        return apply_pushed_session(self._twitch, data)
 
     def display_drop(self, drop, *, countdown: bool = True, subone: bool = False):
         """Display current drop information"""

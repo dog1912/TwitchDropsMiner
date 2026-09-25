@@ -113,16 +113,27 @@ Authentication is disabled by default (`WEBUI_AUTH=0`). The entire auth system i
 
 ## Twitch Login (browser session)
 
-Twitch currently rejects the miner's device-code login (`invalid client`, see [upstream #1165](https://github.com/DevilXD/TwitchDropsMiner/issues/1165)). Until that is fixed, the WebUI signs in with your own browser session instead:
+Twitch currently rejects the miner's device-code login (`invalid client`, see [upstream #1165](https://github.com/DevilXD/TwitchDropsMiner/issues/1165)). Until that is fixed, the WebUI signs in with your own browser session: the `auth-token` cookie plus the `X-Device-Id` and `Client-Integrity` headers your browser sends to Twitch. `Client-Integrity` only lives for about an hour, so the recommended setup lets the browser send fresh values automatically.
+
+### Automatic (recommended): browser userscript
+
+1. Start the miner with a secret in `WEBUI_SESSION_KEY` (any long random string). Without it the `/api/session` endpoint is disabled.
+2. Install a userscript manager in the browser you use for Twitch (Tampermonkey, Violentmonkey, …) and open `http://<miner-host>:5800/tdm-session-sync.user.js` to install the script.
+3. Edit the script's two constants: `MINER_URL` (how the miner is reachable *from that browser*) and `API_KEY` (the value of `WEBUI_SESSION_KEY`).
+4. Keep a twitch.tv tab open while logged in. A tab with a live stream works best because Twitch keeps refreshing its own session there.
+
+The script watches the page's own requests to `gql.twitch.tv`, and posts the `auth-token`, `X-Device-Id` and `Client-Integrity` it sees to `POST /api/session` whenever the integrity value changes (and every 5 minutes as a keep-alive). The miner logs in with the first push, and uses later pushes to replace an expired integrity token without any prompt. The endpoint accepts only requests carrying the key in the `X-Api-Key` header, and it is exempt from the WebUI's own login (`WEBUI_AUTH`) because the userscript has no session cookie.
+
+### Manual fallback
 
 1. In a browser where you are logged in to twitch.tv, open DevTools (F12) → **Network**, filter by `gql`, and click any request to `gql.twitch.tv/gql`.
 2. From **Request Headers** copy `X-Device-Id` and `Client-Integrity`.
 3. Copy the `auth-token` cookie for twitch.tv (**Application** / **Storage** → Cookies).
 4. In the WebUI press **Login** and paste the three values.
 
-The token is saved to `config/cookies.jar` and the device id / integrity to `config/web_session.json`, so restarts don't ask again. `Client-Integrity` expires after about 16 hours; when Twitch rejects it the miner pauses and shows an **Enter new Client-Integrity** button on the Main tab — copy a fresh header value (same browser, same device id) and paste it. Take all values from the same browser profile: the integrity token is bound to the device id.
+When Twitch rejects the integrity token the miner pauses GQL calls and shows an **Enter new Client-Integrity** button on the Main tab; paste a fresh header value from the same browser (the token is bound to the device id).
 
-**Logout** only forgets the stored session; it does not revoke the token, so your browser stays logged in.
+The token is saved to `config/cookies.jar` and the device id / integrity to `config/web_session.json`, so restarts don't ask again. **Logout** only forgets the stored session; it does not revoke the token, so your browser stays logged in.
 
 ## Troubleshooting
 

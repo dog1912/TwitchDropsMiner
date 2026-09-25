@@ -64,6 +64,8 @@ if UI_BACKEND == "nicegui":
     for lang_filepath in WORKING_DIR.joinpath("webui/lang").glob("*.json"):
         if lang_filepath.stem != DEFAULT_LANG:
             to_add.append((lang_filepath, "webui/lang", True))
+    # browser userscript served by the webui (see webui/README.md)
+    to_add.append((WORKING_DIR.joinpath("webui/tdm-session-sync.user.js"), "webui", True))
 
 # Ensure the required to-be-added data exists
 datas: list[tuple[Path, str]] = []
